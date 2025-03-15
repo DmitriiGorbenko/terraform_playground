@@ -1,0 +1,22 @@
+---
+- name: Update /etc/hosts on all VMs
+  hosts: vms
+  become: yes
+  tasks:
+    - name: Add entries to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars[item].ansible_host }} {{ item }}"
+        state: present
+      loop: "{{ groups['vms'] }}"
+    - name: Install Git on master-1
+      yum:  # Используйте `yum` для CentOS/RHEL
+        name: git
+        state: present
+        update_cache: yes  # Обновить кэш пакетов перед установкой
+      when: inventory_hostname == "master-1"  # Устанавливаем только на master-1
+    - name: Install sshpass
+      yum:
+        name: sshpass
+        state: present
+      when: ansible_os_family == "RedHat"  # Убедитесь, что это CentOS/RHEL    

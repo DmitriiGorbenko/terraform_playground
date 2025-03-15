@@ -1,0 +1,49 @@
+---
+- name: Generate SSH key on master-1 and deploy it to all hosts
+  hosts: master-1  # Выполняется только на master-1
+  become: yes  # Выполнение с повышенными привилегиями (sudo)
+  tasks:
+    - name: Ensure the .ssh directory exists
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        mode: '0700'  # Правильные права для директории .ssh
+
+    - name: Generate SSH key pair (if not exists)
+      ansible.builtin.openssh_keypair:
+        path: /root/.ssh/id_rsa
+        type: rsa
+        size: 4096
+        force: no  # Не перезаписывать ключ, если он уже существует
+
+    - name: Read the public key
+      ansible.builtin.slurp:
+        path: /root/.ssh/id_rsa.pub
+      register: ssh_public_key
+
+    - name: Set fact for the public key
+      ansible.builtin.set_fact:
+        public_key: "{{ ssh_public_key.content | b64decode }}"
+
+- name: Fetch the public key from master-1
+  hosts: localhost  # Выполняется на управляющем хосте
+  tasks:
+    - name: Fetch the public key
+      ansible.builtin.set_fact:
+        master1_public_key: "{{ hostvars['master-1'].public_key }}"
+
+- name: Deploy the SSH public key to all hosts
+  hosts: vms  # Применяется ко всем хостам из группы vms
+  become: yes  # Выполнение с повышенными привилегиями (sudo)
+  tasks:
+    - name: Ensure the .ssh directory exists
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        mode: '0700'  # Правильные права для директории .ssh
+
+    - name: Deploy the SSH public key
+      ansible.builtin.authorized_key:
+        user: root  # Пользователь, для которого добавляется ключ
+        state: present
+        key: "{{ hostvars['localhost'].master1_public_key }}"  # Используем публичный ключ с master-1
